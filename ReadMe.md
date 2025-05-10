@@ -45,6 +45,12 @@ A custom launcher for **The Secret of Monkey Island Special Edition**. This laun
    g++ MISELauncher.cpp resource.res -mwindows -lole32 -luuid -lshlwapi -lshell32 -o MISELauncher.exe -static
    ```
 
+## Download
+
+You can download the latest version of the launcher here:
+
+[Download MISELauncher.exe](https://github.com/CurveZ/MISELauncher/releases/latest)
+
 
 
 
