@@ -3,7 +3,7 @@
  * A custom launcher for The Secret of Monkey Island Special Edition.
  *
  * Author: keRveL
- * Version: 1.0
+ * Version: version.txt/dynamic
  * Date: May 2025
  * Description: This program allows users to configure game settings
  *              such as language, resolution, and display mode before
@@ -22,6 +22,7 @@
 #include <sstream>
 #include "resource.h"
 
+
 // Link required libraries for Windows functionality
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "shell32.lib")
@@ -29,10 +30,17 @@
 // Define an ID for the language combo box (because every pirate needs a unique ID)
 #define ID_LANG_COMBO 2001 
 
+// Define a version number for the application (because pirates love to keep track of their loot)
+#ifndef VERSION
+#define VERSION "vUnknown"
+#endif
+
+const std::string windowTitle = "Monkey Launcher - " VERSION " by Curvez 2025"; // Window title with version number
+
 // Declare global variables for UI elements (because pirates don't like surprises)
 HWND hLaunchBtn, hSaveBtn, hEditBox, 
         hIniPathLabel, hResetBtn, hLangCombo, hExitBtn,
-        hResolutionCombo,
+        hResolutionCombo, hSaveReminderLabel,
         hSubtitlesCheckbox, hShadersCheckbox;
 
 // Track whether additional options are visible (like a treasure map hidden in plain sight)
@@ -146,17 +154,17 @@ void LoadSettingsToEditBox() {
         // Match the resolution and windowed values to the combo box items
         int selectedIndex = -1;
         if (!isWindowed && resolutionValue == "3840x2160") {
-            selectedIndex = 0; // "4K UHD  - Full Screen (3840x2160)"
+            selectedIndex = 1; // "4K UHD  - Full Screen (3840x2160)"
         } else if (isWindowed && resolutionValue == "3840x2160") {
-            selectedIndex = 1; // "4K UHD  - Windowed    (3840x2160)"
+            selectedIndex = 2; // "4K UHD  - Windowed    (3840x2160)"
+        } else if (!isWindowed && resolutionValue == "2560x1440") {
+            selectedIndex = 3; // "QHD/2K  - Full Screen (2560x1440)"
+        } else if (isWindowed && resolutionValue == "2560x1440") {
+            selectedIndex = 4; // "QHD/2K  - Windowed    (2560x1440)"
         } else if (!isWindowed && resolutionValue == "1920x1080") {
-            selectedIndex = 2; // "1080p   - Full Screen (1920x1080)"
+            selectedIndex = 5; // "1080p   - Full Screen (1920x1080)"
         } else if (isWindowed && resolutionValue == "1920x1080") {
-            selectedIndex = 3; // "1080p   - Windowed    (1920x1080)"
-        } else if (!isWindowed && resolutionValue == "1280x720") {
-            selectedIndex = 4; // "720p    - Full Screen (1280x720)"
-        } else if (isWindowed && resolutionValue == "1280x720") {
-            selectedIndex = 5; // "720p    - Windowed    (1280x720)"
+            selectedIndex = 6; // "1080p   - Windowed    (1920x1080)"
         }
 
         // Select the appropriate item in the combo box
@@ -220,7 +228,7 @@ void ResetToDefaults() {
     SendMessageA(hLangCombo, CB_SETCURSEL, 0, 0);
 
     // Reset the resolution combo box to 4K Full Screen (index 0)
-    SendMessageA(hResolutionCombo, CB_SETCURSEL, 0, 0);
+    SendMessageA(hResolutionCombo, CB_SETCURSEL, 1, 0);
     SendMessageA(hSubtitlesCheckbox, BM_SETCHECK, BST_CHECKED, 0); // Default: checked
     SendMessageA(hShadersCheckbox, BM_SETCHECK, BST_CHECKED, 0);   // Default: checked
 }
@@ -261,8 +269,26 @@ void LaunchGame() {
     if (reinterpret_cast<intptr_t>(result) <= 32) {
         MessageBoxA(NULL, "Failed to launch the game via Steam. Ensure Steam is installed and running.", "Error", MB_ICONERROR);
     } else {
-        MessageBoxA(NULL, "Game launched successfully via Steam!", "Info", MB_OK);
+        //Disable the message box for successful launch
+        //MessageBoxA(NULL, "Game launched successfully via Steam!", "Info", MB_OK);
     }
+}
+
+
+// Function to get the current desktop resolution (primary display)
+std::string GetDesktopResolution() {
+    DEVMODE devMode = {};
+    devMode.dmSize = sizeof(DEVMODE);
+
+    // Get the current display settings for the primary monitor
+    if (EnumDisplaySettings(NULL, ENUM_CURRENT_SETTINGS, &devMode)) {
+        int width = devMode.dmPelsWidth;
+        int height = devMode.dmPelsHeight;
+        return std::to_string(width) + "x" + std::to_string(height);
+    }
+
+    MessageBoxA(NULL, "Failed to retrieve desktop resolution. Using default resolution.", "Error", MB_ICONERROR);
+    return "1920x1080";
 }
 
 // Window procedure for handling messages
@@ -270,17 +296,93 @@ void LaunchGame() {
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
         case WM_COMMAND:
-            
-        if ((HWND)lParam == hLaunchBtn) { // Launch the game
+            if ((HWND)lParam == hEditBox && HIWORD(wParam) == EN_CHANGE) {
+                // Show the "Remember to save!" label
+                ShowWindow(hSaveReminderLabel, SW_SHOW);
+            }
+            if ((HWND)lParam == hResolutionCombo && HIWORD(wParam) == CBN_SELCHANGE) { // Handle resolution change
+                // Get the selected resolution
+                char resolution[64];
+                int selected = SendMessageA(hResolutionCombo, CB_GETCURSEL, 0, 0);
+                SendMessageA(hResolutionCombo, CB_GETLBTEXT, selected, (LPARAM)resolution);
+
+                if (strcmp(resolution, "Autodetect/Recommend Resolution") == 0) {
+                    // Autodetect the desktop resolution
+                    std::string desktopResolution = GetDesktopResolution();
+
+                    // Update the resolution and windowed fields in the edit box
+                    char buffer[8192];
+                    GetWindowTextA(hEditBox, buffer, sizeof(buffer));
+                    std::string content(buffer);
+
+                    // Update the resolution field
+                    size_t pos = content.find("resolution=");
+                    if (pos != std::string::npos) {
+                        size_t start = pos + 11; // "resolution=" is 11 characters long
+                        size_t end = content.find("\r\n", start);
+                        content.replace(start, end - start, desktopResolution);
+                    }
+
+                    // Set windowed mode to 0 (default to fullscreen for autodetect)
+                    pos = content.find("windowed=");
+                    if (pos != std::string::npos) {
+                        size_t start = pos + 9; // "windowed=" is 9 characters long
+                        size_t end = content.find("\r\n", start);
+                        content.replace(start, end - start, "0");
+                    }
+
+                    // Update the edit box with the new content
+                    SetWindowTextA(hEditBox, content.c_str());
+                    ShowWindow(hSaveReminderLabel, SW_SHOW);
+
+                    // Optionally, show a message box to confirm the change
+                    //MessageBoxA(hwnd, ("Resolution set to " + desktopResolution + "\nFull Screen").c_str(), "Autodetect Resolution", MB_OK);
+                } else {
+                    // Handle other resolution options (existing logic)
+                    bool isWindowed = strstr(resolution, "Windowed") != nullptr;
+                    std::string resolutionValue;
+                    const char* start = strchr(resolution, '(');
+                    const char* end = strchr(resolution, ')');
+                    if (start && end && start < end) {
+                        resolutionValue = std::string(start + 1, end - start - 1);
+                    }
+
+                    // Update the resolution and windowed fields in the edit box
+                    char buffer[8192];
+                    GetWindowTextA(hEditBox, buffer, sizeof(buffer));
+                    std::string content(buffer);
+
+                    size_t pos = content.find("resolution=");
+                    if (pos != std::string::npos) {
+                        size_t start = pos + 11;
+                        size_t end = content.find("\r\n", start);
+                        content.replace(start, end - start, resolutionValue);
+                    }
+
+                    pos = content.find("windowed=");
+                    if (pos != std::string::npos) {
+                        size_t start = pos + 9;
+                        size_t end = content.find("\r\n", start);
+                        content.replace(start, end - start, isWindowed ? "1" : "0");
+                    }
+
+                    SetWindowTextA(hEditBox, content.c_str());
+                    ShowWindow(hSaveReminderLabel, SW_SHOW);
+                }
+            } else if ((HWND)lParam == hLaunchBtn) { // Launch the game
                 LaunchGame();
             
             } else if ((HWND)lParam == hSaveBtn) { // Save settings
                 SaveSettingsFromEditBox();
-                MessageBoxA(hwnd, "Settings saved.", "Info", MB_OK);
+                //MessageBoxA(hwnd, "Settings saved.", "Info", MB_OK);
+
+                // Hide the "Remember to save!" label
+                ShowWindow(hSaveReminderLabel, SW_HIDE);
             
             } else if ((HWND)lParam == hResetBtn) { // Reset to defaults
                 ResetToDefaults();
-                MessageBoxA(hwnd, "Defaults restored. Don't forget to save!", "Info", MB_OK);
+                //MessageBoxA(hwnd, "Defaults restored. Don't forget to save!", "Info", MB_OK);
+                ShowWindow(hSaveReminderLabel, SW_SHOW);
             
             } else if ((HWND)lParam == hExitBtn) { // Exit the application
                 DestroyWindow(hwnd);  // Destroy the window
@@ -319,6 +421,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     content.replace(start, end - start, isWindowed ? "1" : "0");
                 }
                 SetWindowTextA(hEditBox, content.c_str()); // Update the edit box with the new content
+                ShowWindow(hSaveReminderLabel, SW_SHOW);
 
             } else if (LOWORD(wParam) == ID_LANG_COMBO && HIWORD(wParam) == CBN_SELCHANGE) { // Handle language change
                 int selected = SendMessageA(hLangCombo, CB_GETCURSEL, 0, 0);
@@ -332,6 +435,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                 content.replace(start, end - start, std::to_string(selected));
                 }
                 SetWindowTextA(hEditBox, content.c_str());
+                ShowWindow(hSaveReminderLabel, SW_SHOW);
 
             } else if ((HWND)lParam == hSubtitlesCheckbox) { // Handle subtitles checkbox
                 // Toggle subtitles setting
@@ -346,6 +450,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     content.replace(start, end - start, isChecked ? "1" : "0");
                 }
                 SetWindowTextA(hEditBox, content.c_str());
+                ShowWindow(hSaveReminderLabel, SW_SHOW);
 
             } else if ((HWND)lParam == hShadersCheckbox) { // Handle shaders checkbox
                 // Toggle shaders setting
@@ -360,14 +465,20 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
                     content.replace(start, end - start, isChecked ? "1" : "0");
                 }
                 SetWindowTextA(hEditBox, content.c_str());
+                ShowWindow(hSaveReminderLabel, SW_SHOW);
             }
             break;
 
         case WM_CTLCOLORSTATIC: {
             HDC hdcStatic = (HDC)wParam;
-            SetBkMode(hdcStatic, TRANSPARENT); // Make the background transparent
-            SetTextColor(hdcStatic, RGB(0, 0, 0)); // Optional: Set text color to black
-            return (LRESULT)GetStockObject(NULL_BRUSH); // Use the parent window's background color
+            HWND hStatic = (HWND)lParam;
+
+            if (hStatic == hSaveReminderLabel) {
+                SetTextColor(hdcStatic, RGB(255, 0, 0)); // Red text
+                SetBkMode(hdcStatic, TRANSPARENT);      // Transparent background
+                return (LRESULT)GetStockObject(NULL_BRUSH); // Use parent window's background
+            }
+            break;
         }
 
         case WM_PAINT: {
@@ -396,12 +507,15 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 // Entry point
 // "This is the second biggest entry point I've ever seen!"
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
-
     iniPath = GetINIPath();
     if (iniPath.empty()) {
         MessageBoxA(NULL, "settings.ini file not found!", "Error", MB_ICONERROR);
         return 1;
     }
+
+    // Construct the window title with the version number
+    //const std::string windowTitle = std::string("Monkey Launcher - by Curvez 2025 " VERSION "").c_str();
+
 
     const char CLASS_NAME[] = "MonkeyLauncher";
     WNDCLASSA wc = {};
@@ -413,7 +527,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     RegisterClassA(&wc);
 
     HWND hwnd = CreateWindowExA(
-        0, CLASS_NAME, "Monkey Launcher - by keRveL 2025",
+        0, CLASS_NAME, windowTitle.c_str(),
         WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
         CW_USEDEFAULT, CW_USEDEFAULT, 792, 480, // Adjusted window size
         NULL, NULL, hInst, NULL
@@ -457,16 +571,17 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
 
     // Create the resolution combo box
     hResolutionCombo = CreateWindowA("COMBOBOX", "", WS_VISIBLE | WS_CHILD | CBS_DROPDOWNLIST | CBS_HASSTRINGS | WS_VSCROLL,
-                                     240, 340, 300, 150, hwnd, NULL, hInst, NULL); // Same y position as language combo box
+                                     240, 340, 300, 230, hwnd, NULL, hInst, NULL); // Same y position as language combo box
     SendMessageA(hResolutionCombo, WM_SETFONT, (WPARAM)hFontLarge, TRUE);
 
     // Add resolutions to the combo box
+    SendMessageA(hResolutionCombo, CB_ADDSTRING, 0, (LPARAM)"Autodetect/Recommend Resolution");
     SendMessageA(hResolutionCombo, CB_ADDSTRING, 0, (LPARAM)"4K UHD  - Full Screen (3840x2160)");
     SendMessageA(hResolutionCombo, CB_ADDSTRING, 0, (LPARAM)"4K UHD  - Windowed    (3840x2160)");
-    SendMessageA(hResolutionCombo, CB_ADDSTRING, 0, (LPARAM)"1080p   - Full Screen (1920x1080)");
-    SendMessageA(hResolutionCombo, CB_ADDSTRING, 0, (LPARAM)"1080p   - Windowed    (1920x1080)");
-    SendMessageA(hResolutionCombo, CB_ADDSTRING, 0, (LPARAM)"720p    - Full Screen (1280x720)");
-    SendMessageA(hResolutionCombo, CB_ADDSTRING, 0, (LPARAM)"720p    - Windowed    (1280x720)");
+    SendMessageA(hResolutionCombo, CB_ADDSTRING, 0, (LPARAM)"QHD/2K  - Full Screen (2560x1440)");
+    SendMessageA(hResolutionCombo, CB_ADDSTRING, 0, (LPARAM)"QHD/2K  - Windowed    (2560x1440)");
+    SendMessageA(hResolutionCombo, CB_ADDSTRING, 0, (LPARAM)"Full HD - Full Screen (1920x1080)");
+    SendMessageA(hResolutionCombo, CB_ADDSTRING, 0, (LPARAM)"Full HD - Windowed    (1920x1080)");
 
     // Subtitles checkbox
     hSubtitlesCheckbox = CreateWindowA("BUTTON", "Enable Subtitles", WS_VISIBLE | WS_CHILD | BS_AUTOCHECKBOX,
@@ -492,6 +607,16 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
     // Exit button
     hExitBtn = CreateWindowW(L"BUTTON", L"❌ Exit!", WS_VISIBLE | WS_CHILD , 610, 405, 150, 30, hwnd, NULL, hInst, NULL);
     SendMessageW(hExitBtn, WM_SETFONT, (WPARAM)hFontEmoji, TRUE);
+    
+    // Create a label for the Save Reminder
+    hSaveReminderLabel = CreateWindowA(
+        "STATIC", "Remember to save!", WS_VISIBLE | WS_CHILD | SS_RIGHT,
+        600, 340, 160, 20, hwnd, NULL, hInst, NULL
+    );
+        SendMessageA(hSaveReminderLabel, WM_SETFONT, (WPARAM)hFontSmall, TRUE);
+        ShowWindow(hSaveReminderLabel, SW_HIDE); // Initially hidden
+
+        
 
     LoadSettingsToEditBox();
     ShowWindow(hwnd, nCmdShow);
