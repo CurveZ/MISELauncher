@@ -39,7 +39,7 @@ const std::string windowTitle = "Monkey Launcher - " VERSION " by Curvez 2025"; 
 
 // Declare global variables for UI elements (because pirates don't like surprises)
 HWND hLaunchBtn, hSaveBtn, hEditBox, 
-        hIniPathLabel, hResetBtn, hLangCombo, hExitBtn,
+        hIniPathLabel, hIniPathTextLabel, hResetBtn, hLangCombo, hExitBtn,
         hResolutionCombo, hSaveReminderLabel,
         hSubtitlesCheckbox, hShadersCheckbox;
 
@@ -473,11 +473,22 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
             HDC hdcStatic = (HDC)wParam;
             HWND hStatic = (HWND)lParam;
 
-            if (hStatic == hSaveReminderLabel) {
-                SetTextColor(hdcStatic, RGB(255, 0, 0)); // Red text
-                SetBkMode(hdcStatic, TRANSPARENT);      // Transparent background
-                return (LRESULT)GetStockObject(NULL_BRUSH); // Use parent window's background
+            if (
+                hStatic == hSaveReminderLabel ||
+                hStatic == hIniPathLabel ||
+                hStatic == hIniPathTextLabel ||
+                hStatic == hSubtitlesCheckbox ||
+                hStatic == hShadersCheckbox
+            ) {
+                if (hStatic == hSaveReminderLabel) {
+                    SetTextColor(hdcStatic, RGB(255, 0, 0)); // Red text for the reminder
+                } else {
+                    SetTextColor(hdcStatic, RGB(0, 0, 0));   // Black text for others
+                }
+                SetBkMode(hdcStatic, TRANSPARENT); // Transparent background for all
+                return (LRESULT)GetStockObject(NULL_BRUSH);
             }
+            // For all other static controls, use the default background.
             break;
         }
 
@@ -551,7 +562,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE, LPSTR, int nCmdShow) {
         DEFAULT_QUALITY, DEFAULT_PITCH | FF_SWISS, "Segoe UI Emoji"
     );
 
-    CreateWindowA("STATIC", "Settings INI Path:", WS_VISIBLE | WS_CHILD, 20, 20, 120, 20, hwnd, NULL, hInst, NULL);
+    hIniPathTextLabel = CreateWindowA("STATIC", "Settings INI Path:", WS_VISIBLE | WS_CHILD, 20, 20, 120, 20, hwnd, NULL, hInst, NULL);
     hIniPathLabel = CreateWindowA("STATIC", iniPath.c_str(), WS_VISIBLE | WS_CHILD | SS_LEFT | SS_NOPREFIX, 150, 20, 600, 40, hwnd, NULL, hInst, NULL);
     SendMessageA(hIniPathLabel, WM_SETFONT, (WPARAM)hFontSmall, TRUE);
 
