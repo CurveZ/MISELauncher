@@ -2,6 +2,11 @@
 
 A custom launcher for **The Secret of Monkey Island Special Edition**. This launcher provides an easy way to configure game settings, such as language, resolution, and display mode, before launching the game.
 
+## Links
+
+- **Project Webpage:** [https://kervels.net/miselauncher/](https://kervels.net/miselauncher/)
+- **Main Website:** [https://kervels.net/](https://kervels.net/)
+
 ## Why Use This Launcher?
 
 - **Change Language Anytime:**
